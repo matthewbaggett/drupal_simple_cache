@@ -1,9 +1,12 @@
 <?php
-define('SIMPLE_CACHE_CAN_DRUPAL_CACHE', false);
-define('SIMPLE_CACHE_CAN_APC_CACHE', true);
-define('SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE', true);
-define('SIMPLE_CACHE_CAN_SESSION_CACHE', false);
-define('SIMPLE_CACHE_CAN_DISK_CACHE', false);
+
+// Define our settings if they've not been set before.
+if(!defined('SIMPLE_CACHE_CAN_DRUPAL_CACHE'))       define('SIMPLE_CACHE_CAN_DRUPAL_CACHE',       false );
+if(!defined('SIMPLE_CACHE_CAN_APC_CACHE'))          define('SIMPLE_CACHE_CAN_APC_CACHE',          true  );
+if(!defined('SIMPLE_CACHE_CAN_DATABASE_CACHE'))     define('SIMPLE_CACHE_CAN_DATABASE_CACHE',     true  );
+if(!defined('SIMPLE_CACHE_CAN_SESSION_CACHE'))      define('SIMPLE_CACHE_CAN_SESSION_CACHE',      false );
+if(!defined('SIMPLE_CACHE_CAN_DISK_CACHE'))         define('SIMPLE_CACHE_CAN_DISK_CACHE',         false );
+
 /**
  * Return the name of the APC bin to use. Prevents collision with other sites.
  *
@@ -14,9 +17,9 @@ function simple_cache_bin() {
 }
 
 function simple_cache_clean(){
-  if(SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
+  if(SIMPLE_CACHE_CAN_DATABASE_CACHE){
     // Quick cleanup of expired things
-    db_delete('cache_simplecachecache')
+    db_delete('cache_simplecache')
       ->condition('cache_expires',date("Y-m-d H:i:s") , "<")
       ->execute();
   }
@@ -40,14 +43,14 @@ function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
     apc_store($key, serialize($value));
     $simple_cache_mechanism = 'apc';
     return TRUE;
-  } elseif (SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
+  } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
     if($expire === CACHE_PERMANENT){
       // Ten years should be enough right?
       $expires = time() + (86400 * 365 * 10);
     }else{
       $expires = time() + $expire;
     }
-    $success = db_merge('cache_horizon')
+    $success = db_merge('cache_simplecache')
       ->fields(array(
                     'cache_key' => $key,
                     'cache_value' => serialize($value),
@@ -99,9 +102,9 @@ function simple_cache_get($key) {
       return unserialize(apc_fetch($key));
     }
     return FALSE;
-  } elseif (SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
-    $query = db_select('cache_horizon','ch');
-    $query->fields('ch');
+  } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
+    $query = db_select('cache_simplecache','csc');
+    $query->fields('csc');
     $query->condition('cache_key', $key);
     $query->condition('cache_expires', date("Y-m-d H:i:s"), '>');
     $responses = $query->execute()->fetchAllAssoc('cid');
