@@ -1,0 +1,45 @@
+<?php
+
+function simple_cache_schema(){
+  $schema['cache_simplecache'] = array(
+    'description' => 'TODO: please describe this table!',
+    'fields' => array(
+      'cid' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'cache_key' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'char',
+        'length' => '255',
+        'not null' => TRUE,
+      ),
+      'cache_value' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'blob',
+        'size' => 'big',
+        'not null' => TRUE,
+      ),
+      'cache_created' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'datetime',
+        'mysql_type' => 'datetime',
+        'not null' => TRUE,
+      ),
+      'cache_expires' => array(
+        'description' => 'TODO: please describe this field!',
+        'type' => 'datetime',
+        'mysql_type' => 'datetime',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('cid'),
+    'unique keys' => array(
+      'key_UNIQUE' => array('cache_key')
+    ),
+  );
+
+  return $schema;
+}

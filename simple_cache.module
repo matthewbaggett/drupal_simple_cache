@@ -1,0 +1,179 @@
+<?php
+define('SIMPLE_CACHE_CAN_DRUPAL_CACHE', false);
+define('SIMPLE_CACHE_CAN_APC_CACHE', true);
+define('SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE', true);
+define('SIMPLE_CACHE_CAN_SESSION_CACHE', false);
+define('SIMPLE_CACHE_CAN_DISK_CACHE', false);
+/**
+ * Return the name of the APC bin to use. Prevents collision with other sites.
+ *
+ * @return string
+ */
+function simple_cache_bin() {
+  return "horizon";
+}
+
+function simple_cache_clean(){
+  if(SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
+    // Quick cleanup of expired things
+    db_delete('cache_simplecachecache')
+      ->condition('cache_expires',date("Y-m-d H:i:s") , "<")
+      ->execute();
+  }
+}
+
+/**
+ * Add an item to the cache
+ *
+ * @param string $key
+ * @param mixed $value
+ * @param int $expire seconds until expire
+ * @return boolean
+ */
+function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
+  global $simple_cache_mechanism;
+  if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
+    $cache = simple_cache_get_cache();
+    $simple_cache_mechanism = 'drupal';
+    return $cache->set($key, $value, $expire);
+  } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_store')){
+    apc_store($key, serialize($value));
+    $simple_cache_mechanism = 'apc';
+    return TRUE;
+  } elseif (SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
+    if($expire === CACHE_PERMANENT){
+      // Ten years should be enough right?
+      $expires = time() + (86400 * 365 * 10);
+    }else{
+      $expires = time() + $expire;
+    }
+    $success = db_merge('cache_horizon')
+      ->fields(array(
+                    'cache_key' => $key,
+                    'cache_value' => serialize($value),
+                    'cache_created' => date("Y-m-d H:i:s"),
+                    'cache_expires' => date("Y-m-d H:i:s", $expires)
+               ))
+      ->key(array('cache_key' => $key))
+      ->execute();
+    if($success){
+      return TRUE;
+    }
+    return FALSE;
+  } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
+    $_SESSION['HORIZON_DISK_CACHE_' . $key] = serialize($value);
+    $simple_cache_mechanism = 'session';
+    return TRUE;
+  } elseif (SIMPLE_CACHE_CAN_DISK_CACHE){
+    $file = simple_cache_disk_name($key);
+    file_put_contents($file, serialize($value));
+    chmod($file, 0660);
+    $simple_cache_mechanism = 'disk';
+    return FALSE;
+  }else{
+    $simple_cache_mechanism = 'none';
+    return FALSE;
+  }
+}
+
+/**
+ * Pull an item from the cache. Returns false on failure.
+ *
+ * @param string $key
+ * @return mixed
+ */
+function simple_cache_get($key) {
+  simple_cache_clean();
+
+  if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
+    $cache = simple_cache_get_cache();
+    $hit   = $cache->get($key);
+    if (is_object($hit)) {
+      if (property_exists($hit, 'data')) {
+        return $hit->data;
+      }
+    }
+    return FALSE;
+  } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_fetch')){
+    if(apc_exists($key)){
+      return unserialize(apc_fetch($key));
+    }
+    return FALSE;
+  } elseif (SIMPLE_CACHE_CAN_SIMPLECACHE_CACHE){
+    $query = db_select('cache_horizon','ch');
+    $query->fields('ch');
+    $query->condition('cache_key', $key);
+    $query->condition('cache_expires', date("Y-m-d H:i:s"), '>');
+    $responses = $query->execute()->fetchAllAssoc('cid');
+    if(count($responses) == 0){
+      return FALSE;
+    }else{
+      $response = (array) end($responses);
+      return unserialize($response['cache_value']);
+    }
+  } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
+    if(isset($_SESSION['HORIZON_DISK_CACHE_' . $key])){
+      return unserialize($_SESSION['HORIZON_DISK_CACHE_' . $key]);
+    }
+    return FALSE;
+  } elseif (SIMPLE_CACHE_CAN_DISK_CACHE) {
+    // Attempt to use a file
+    $file = simple_cache_disk_name($key);
+    if (file_exists($file)) {
+      return unserialize(file_get_contents($file));
+    }
+    return FALSE;
+  }else{
+    return FALSE;
+  }
+}
+
+/**
+ * Expire a cached item
+ *
+ * @param $key
+ */
+function simple_cache_expire($key) {
+  if (class_exists('DrupalAPCCache')) {
+    // Selectively remove the cache item in APC.
+    $cache = simple_cache_get_cache();
+    $cache->clear($key);
+  } else {
+    // Unlink file
+    $file = simple_cache_disk_name($key);
+    if (file_exists($file)) {
+      unlink($file);
+    }
+  }
+}
+
+function simple_cache_get_cache() {
+  if (!isset($GLOBALS['apc_cache_object']) || !$GLOBALS['apc_cache_object'] instanceof DrupalAPCCache) {
+    $GLOBALS['apc_cache_object'] = new DrupalAPCCache(simple_cache_bin());
+  }
+  return $GLOBALS['apc_cache_object'];
+}
+
+/**
+ * Generate a file location if we're using on-disk caching
+ *
+ * @param $key
+ * @return string
+ */
+function simple_cache_disk_name($key) {
+  $hash      = hash("sha1", $key);
+  $file_name = substr($hash, 0, 2) . "/" . substr($hash, 2, 2) . "/" . substr($hash, 4, 2) . "/" . substr($hash, 6, 2) . "/" . substr($hash, 8) . ".cache";
+  $file_path = "/tmp/simple_cache/{$file_name}";
+  if (!file_exists(dirname($file_path))) {
+    mkdir(dirname($file_path), 0777, true);
+  }
+  return $file_path;
+}
+
+/**
+ * Dump dah cache. Get to da choppah.
+ */
+function simple_cache_flush() {
+  apc_clear_cache();
+  apc_clear_cache('user');
+}
