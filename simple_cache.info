@@ -1,0 +1,5 @@
+name = Simple Cache
+description = Nice and simple caching system
+package = Other
+core = 7.x
+
