@@ -50,18 +50,23 @@ function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
     }else{
       $expires = time() + $expire;
     }
-    $success = db_merge('cache_simplecache')
-      ->fields(array(
-                    'cache_key' => $key,
-                    'cache_value' => serialize($value),
-                    'cache_created' => date("Y-m-d H:i:s"),
-                    'cache_expires' => date("Y-m-d H:i:s", $expires)
-               ))
-      ->key(array('cache_key' => $key))
-      ->execute();
-    if($success){
-      return TRUE;
-    }
+      try{
+        $success = db_merge('cache_simplecache')
+          ->fields(array(
+                        'cache_key' => $key,
+                        'cache_value' => serialize($value),
+                        'cache_created' => date("Y-m-d H:i:s"),
+                        'cache_expires' => date("Y-m-d H:i:s", $expires)
+                   ))
+          ->key(array('cache_key' => $key))
+          ->execute();
+        if($success){
+          return TRUE;
+        }
+      }catch(PDOException $e){
+        watchdog("PDO", $e->getMessage());
+        return FALSE;
+      }
     return FALSE;
   } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
     $_SESSION['HORIZON_DISK_CACHE_' . $key] = serialize($value);
@@ -103,16 +108,21 @@ function simple_cache_get($key) {
     }
     return FALSE;
   } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
-    $query = db_select('cache_simplecache','csc');
-    $query->fields('csc');
-    $query->condition('cache_key', $key);
-    $query->condition('cache_expires', date("Y-m-d H:i:s"), '>');
-    $responses = $query->execute()->fetchAllAssoc('cid');
-    if(count($responses) == 0){
-      return FALSE;
-    }else{
-      $response = (array) end($responses);
-      return unserialize($response['cache_value']);
+    try{
+        $query = db_select('cache_simplecache','csc');
+        $query->fields('csc');
+        $query->condition('cache_key', $key);
+        $query->condition('cache_expires', date("Y-m-d H:i:s"), '>');
+        $responses = $query->execute()->fetchAllAssoc('cid');
+        if(count($responses) == 0){
+          return FALSE;
+        }else{
+          $response = (array) end($responses);
+          return unserialize($response['cache_value']);
+        }
+    }catch(PDOException $e){
+        watchdog("PDO", $e->getMessage());
+        return FALSE;
     }
   } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
     if(isset($_SESSION['HORIZON_DISK_CACHE_' . $key])){
