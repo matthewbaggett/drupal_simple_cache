@@ -190,3 +190,10 @@ function simple_cache_flush() {
   apc_clear_cache();
   apc_clear_cache('user');
 }
+
+function simple_cache_flush_caches() {
+    if(SIMPLE_CACHE_CAN_DATABASE_CACHE){
+        return array('cache_simplecache');
+    }
+    return array();
+}
