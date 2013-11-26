@@ -53,10 +53,12 @@ function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
       try{
         $success = db_merge('cache_simplecache')
           ->fields(array(
-                        'cache_key' => $key,
-                        'cache_value' => serialize($value),
+                        'cache_key'     => $key,
+                        'cache_value'   => serialize($value),
                         'cache_created' => date("Y-m-d H:i:s"),
-                        'cache_expires' => date("Y-m-d H:i:s", $expires)
+                        'cache_expires' => date("Y-m-d H:i:s", $expires),
+                        'expires'       => $expires,
+                        'created'       => time(),
                    ))
           ->key(array('cache_key' => $key))
           ->execute();
