@@ -25,6 +25,29 @@ function simple_cache_clean(){
   }
 }
 
+define("SIMPLE_CACHE_MECHANISM_NONE",       "NONE");
+define("SIMPLE_CACHE_MECHANISM_DISK",       "DISK");
+define("SIMPLE_CACHE_MECHANISM_SESSION",    "SESSION");
+define("SIMPLE_CACHE_MECHANISM_DATABASE",   "DATABASE");
+define("SIMPLE_CACHE_MECHANISM_APC",        "APC");
+define("SIMPLE_CACHE_MECHANISM_DRUPAL_APC", "DRUPAL_APC");
+
+function simple_cache_determine_caching_mechanism(){
+  if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
+    return SIMPLE_CACHE_MECHANISM_DRUPAL_APC;
+  } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_store')){
+    return SIMPLE_CACHE_MECHANISM_APC;
+  } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
+    return SIMPLE_CACHE_MECHANISM_DATABASE;
+  } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
+    return SIMPLE_CACHE_MECHANISM_SESSION;
+  } elseif (SIMPLE_CACHE_CAN_DISK_CACHE){
+    return SIMPLE_CACHE_MECHANISM_DISK;
+  }else{
+    return SIMPLE_CACHE_MECHANISM_NONE;
+  }
+}
+
 /**
  * Add an item to the cache
  *
@@ -35,21 +58,28 @@ function simple_cache_clean(){
  */
 function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
   global $simple_cache_mechanism;
-  if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
-    $cache = simple_cache_get_cache();
-    $simple_cache_mechanism = 'drupal';
-    return $cache->set($key, $value, $expire);
-  } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_store')){
-    apc_store($key, serialize($value));
-    $simple_cache_mechanism = 'apc';
-    return TRUE;
-  } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
-    if($expire === CACHE_PERMANENT){
-      // Ten years should be enough right?
-      $expires = time() + (86400 * 365 * 10);
-    }else{
-      $expires = time() + $expire;
-    }
+  echo "simple_cache_put by " . simple_cache_determine_caching_mechanism() . "<br />";
+  switch(simple_cache_determine_caching_mechanism()){
+    case SIMPLE_CACHE_MECHANISM_NONE:
+      $simple_cache_mechanism = 'none';
+      return FALSE;
+    case SIMPLE_CACHE_MECHANISM_DISK:
+      $file = simple_cache_disk_name($key);
+      file_put_contents($file, serialize($value));
+      chmod($file, 0660);
+      $simple_cache_mechanism = 'disk';
+      return FALSE;
+    case SIMPLE_CACHE_MECHANISM_SESSION:
+      $_SESSION['HORIZON_DISK_CACHE_' . $key] = serialize($value);
+      $simple_cache_mechanism = 'session';
+      return TRUE;
+    case SIMPLE_CACHE_MECHANISM_DATABASE:
+      if($expire === CACHE_PERMANENT){
+        // Ten years should be enough right?
+        $expires = time() + (86400 * 365 * 10);
+      }else{
+        $expires = time() + $expire;
+      }
       try{
         $success = db_merge('cache_simplecache')
           ->fields(array(
@@ -62,28 +92,31 @@ function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
                    ))
           ->key(array('cache_key' => $key))
           ->execute();
+        echo "Success? " . ($success?'Yes':'No');
         if($success){
           return TRUE;
+        }else{
+          return FALSE;
         }
       }catch(PDOException $e){
         watchdog("PDO", $e->getMessage());
+        drupal_set_message($e->getMessage());
         return FALSE;
       }
-    return FALSE;
-  } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
-    $_SESSION['HORIZON_DISK_CACHE_' . $key] = serialize($value);
-    $simple_cache_mechanism = 'session';
-    return TRUE;
-  } elseif (SIMPLE_CACHE_CAN_DISK_CACHE){
-    $file = simple_cache_disk_name($key);
-    file_put_contents($file, serialize($value));
-    chmod($file, 0660);
-    $simple_cache_mechanism = 'disk';
-    return FALSE;
-  }else{
-    $simple_cache_mechanism = 'none';
-    return FALSE;
+      return FALSE;
+    case SIMPLE_CACHE_MECHANISM_APC:
+      apc_store($key, serialize($value));
+      $simple_cache_mechanism = 'apc';
+      return TRUE;
+    case SIMPLE_CACHE_MECHANISM_DRUPAL_APC:
+      $cache = simple_cache_get_cache();
+      $simple_cache_mechanism = 'drupal';
+      return $cache->set($key, $value, $expire);
+    default:
+      drupal_set_message("Simplecache: No caching strategy.");
+      return false;
   }
+
 }
 
 /**

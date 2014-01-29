@@ -55,3 +55,24 @@ function simple_cache_schema(){
 
   return $schema;
 }
+
+
+/**
+ * Add expire column if not exists
+ */
+function simple_cache_update_7001() {
+  if(!db_field_exists('cache_simplecache', 'expire')){
+    $schema = simple_cache_schema();
+    db_add_field('cache_simplecache', 'expire', $schema['cache_simplecache']['fields']['expire']);
+  }
+}
+
+/**
+ * Add created column if not exists
+ */
+function simple_cache_update_7002() {
+  if(!db_field_exists('cache_simplecache', 'created')){
+    $schema = simple_cache_schema();
+    db_add_field('cache_simplecache', 'created', $schema['cache_simplecache']['fields']['created']);
+  }
+}
