@@ -58,7 +58,6 @@ function simple_cache_determine_caching_mechanism(){
  */
 function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
   global $simple_cache_mechanism;
-  echo "simple_cache_put by " . simple_cache_determine_caching_mechanism() . "<br />";
   switch(simple_cache_determine_caching_mechanism()){
     case SIMPLE_CACHE_MECHANISM_NONE:
       $simple_cache_mechanism = 'none';
@@ -92,7 +91,6 @@ function simple_cache_put($key, $value, $expire = CACHE_PERMANENT) {
                    ))
           ->key(array('cache_key' => $key))
           ->execute();
-        echo "Success? " . ($success?'Yes':'No');
         if($success){
           return TRUE;
         }else{
