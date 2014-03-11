@@ -178,18 +178,40 @@ function simple_cache_get($key) {
  * Expire a cached item
  *
  * @param $key
+ * @return bool Weather or not the cached item was expired.
  */
 function simple_cache_expire($key) {
-  if (class_exists('DrupalAPCCache')) {
+  if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
     // Selectively remove the cache item in APC.
     $cache = simple_cache_get_cache();
     $cache->clear($key);
-  } else {
-    // Unlink file
+    return TRUE;
+  } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_fetch')){
+    if(apc_exists($key)){
+      apc_delete($key);
+      return TRUE;
+    }else{
+      return FALSE;
+    }
+  } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
+    $query = db_delete("cache_simplecache");
+    $query->condition('cache_key', $key);
+    $query->execute();
+  } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
+    if(isset($_SESSION['HORIZON_DISK_CACHE_' . $key])){
+      unset($_SESSION['HORIZON_DISK_CACHE_' . $key]);
+      return TRUE;
+    }
+    return FALSE;
+  } elseif (SIMPLE_CACHE_CAN_DISK_CACHE) {
     $file = simple_cache_disk_name($key);
     if (file_exists($file)) {
       unlink($file);
+      return TRUE;
     }
+    return FALSE;
+  }else{
+    return FALSE;
   }
 }
 
