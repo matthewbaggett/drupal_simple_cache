@@ -127,6 +127,7 @@ function simple_cache_get($key) {
   simple_cache_clean();
 
   if (SIMPLE_CACHE_CAN_DRUPAL_CACHE && class_exists('DrupalAPCCache')) {
+    //drupal_set_message('simple_cache_get mode: DrupalAPCCache');
     $cache = simple_cache_get_cache();
     $hit   = $cache->get($key);
     if (is_object($hit)) {
@@ -136,11 +137,13 @@ function simple_cache_get($key) {
     }
     return FALSE;
   } elseif (SIMPLE_CACHE_CAN_APC_CACHE && function_exists('apc_fetch')){
+    //drupal_set_message('simple_cache_get mode: apc_fetch');
     if(apc_exists($key)){
       return unserialize(apc_fetch($key));
     }
     return FALSE;
   } elseif (SIMPLE_CACHE_CAN_DATABASE_CACHE){
+    //drupal_set_message('simple_cache_get mode: db');
     try{
         $query = db_select('cache_simplecache','csc');
         $query->fields('csc');
@@ -158,11 +161,13 @@ function simple_cache_get($key) {
         return FALSE;
     }
   } elseif (SIMPLE_CACHE_CAN_SESSION_CACHE){
+    //drupal_set_message('simple_cache_get mode: session');
     if(isset($_SESSION['HORIZON_DISK_CACHE_' . $key])){
       return unserialize($_SESSION['HORIZON_DISK_CACHE_' . $key]);
     }
     return FALSE;
   } elseif (SIMPLE_CACHE_CAN_DISK_CACHE) {
+    //drupal_set_message('simple_cache_get mode: disk');
     // Attempt to use a file
     $file = simple_cache_disk_name($key);
     if (file_exists($file)) {
@@ -170,6 +175,7 @@ function simple_cache_get($key) {
     }
     return FALSE;
   }else{
+    //drupal_set_message('simple_cache_get mode: none');
     return FALSE;
   }
 }
@@ -244,11 +250,17 @@ function simple_cache_disk_name($key) {
 function simple_cache_flush() {
   apc_clear_cache();
   apc_clear_cache('user');
+  if(function_exists('apc_clear_cache')){
+    apc_clear_cache();
+  }
 }
 
 function simple_cache_flush_caches() {
     if(SIMPLE_CACHE_CAN_DATABASE_CACHE){
         return array('cache_simplecache');
+    }
+    if(function_exists('apc_clear_cache')){
+      apc_clear_cache();
     }
     return array();
 }
