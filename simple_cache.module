@@ -225,7 +225,7 @@ function simple_cache_get_cache() {
   if (!isset($GLOBALS['apc_cache_object']) || !$GLOBALS['apc_cache_object'] instanceof DrupalAPCCache) {
     $GLOBALS['apc_cache_object'] = new DrupalAPCCache(simple_cache_bin());
   }
-  return $GLOBALS['apc_cache_object'];
+  return $GLOBALS['apc_cache_object'];So
 }
 
 /**
